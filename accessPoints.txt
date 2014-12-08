@@ -1,0 +1,1 @@
+# List of router IPs goes here. Is parsed with regex so formatting doesnt matter. 
