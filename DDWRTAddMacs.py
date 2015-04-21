@@ -36,12 +36,20 @@ class AllowAllKeys(paramiko.MissingHostKeyPolicy):
         return
     
 class bcolors:
+    ''' Does not work under Windows
     HEADER  = '\033[95m' #pink?
     OKBLUE  = '\033[94m'
     OKGREEN = '\033[92m' #green
     WARNING = '\033[93m' # yellow
     FAIL    = '\033[91m'#red
-    ENDC    = '\033[0m'
+    ENDC    = '\033[0m' '''
+
+    HEADER  = ''
+    OKBLUE  = ''
+    OKGREEN = ''
+    WARNING = '' 
+    FAIL    = ''
+    ENDC    = ''
     
 def parseConfig():
     '''Parses the two config files ./accessPoints.txt and ./macs.txt with regex
@@ -85,7 +93,10 @@ def statusChange(status):
     for element in status:
         string += element['ip'] + ' ' + element['status'] + '\n'
         
-    print chr(27) + "[2J"  
+    os.system("cls")
+
+    ''' print chr(27) + "[2J"  Does not work under windows '''
+
     sys.stdout.write(string)
     sys.stdout.flush()
     
@@ -154,7 +165,48 @@ def addMacs(user, passwd, ip):
         client.exec_command('nvram set ath0_maclist="$(cat macs.txt)" && '\
                     'nvram set wl0_maclist="$(cat macs.txt)" && nvram commit')
         
-        statusChangeOneIP(ip, bcolors.OKGREEN + 'changes commited' +\
+        statusChangeOneIP(ip, bcolors.OKGREEN + 'changes committed' +\
+                            bcolors.ENDC)
+        #print('Changes commited')
+    except SSHException:
+        statusChangeOneIP(ip, bcolors.FAIL + 'SSH Exception' + bcolors.ENDC)
+        client.close()
+        return
+    client.close()
+
+def restart(user, passwd, ip):
+    client = paramiko.SSHClient()
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(AllowAllKeys())
+
+    try:
+        statusChangeOneIP(ip, bcolors.OKBLUE + 'connecting' + bcolors.ENDC)
+        client.connect(ip, username=user, password=passwd)
+    except BadHostKeyException:
+        statusChangeOneIP(ip, bcolors.FAIL + 'Host Key Exception' +\
+                            bcolors.ENDC)
+        client.close()
+        return
+    except AuthenticationException:
+        user = raw_input('Authentication Exception, username: ')
+        passwd = getpass.getpass('Password: ')
+        addMacs(user, passwd, ip, macs)
+    except SSHException:
+        statusChangeOneIP(ip, bcolors.FAIL + 'SSH Exception' + bcolors.ENDC)
+        client.close()
+        return
+    except socket_error:
+        statusChangeOneIP(ip, bcolors.FAIL + 'cannot reach device' +\
+                            bcolors.ENDC)
+        client.close()
+        return
+    
+    try:
+        '''restart the boxes'''
+        
+        client.exec_command('nrc restart')
+        time.sleep(0.5)
+        statusChangeOneIP(ip, bcolors.OKGREEN + 'radio restarted' +\
                             bcolors.ENDC)
         #print('Changes commited')
     except SSHException:
@@ -166,6 +218,9 @@ def addMacs(user, passwd, ip):
 def start(user, passwd, aps):
     for ip in aps:
         addMacs(user, passwd, ip)
+    for ip in aps:
+        restart(user, passwd, ip)        
+    input('Press Enter to exit')
     
 macs, aps = parseConfig()
 
